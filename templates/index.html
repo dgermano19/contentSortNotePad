@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bloco de Notas com Categorização</title>
+</head>
+<body>
+
+    <!-- Seção 1: Formulário para criar/editar nota -->
+    <section id="nota-form">
+        <h2 id="form-title">Criar Nova Nota</h2>
+        <form id="note-form">
+            <label for="title">Título:</label>
+            <input type="text" id="title" name="title" required><br>
+
+            <label for="content">Conteúdo:</label>
+            <textarea id="content" name="content" required></textarea><br>
+
+            <label for="category">Categoria:</label>
+            <input type="text" id="category" name="category" value="Não categorizada" readonly><br>
+
+            <button type="submit" id="submit-button">Enviar</button>
+            <button type="button" id="cancel-button" style="display: none;" onclick="cancelEdit()">Cancelar</button>
+            <button type="button" id="save-button" style="display: none;" onclick="saveEdit()">Salvar alterações</button>
+        </form>
+    </section>
+
+    <!-- Seção 1: Lista de notas criadas -->
+    <section id="lista-notas">
+        <h2>Notas Criadas</h2>
+        <ul id="notes-list"></ul>
+    </section>
+
+    <!-- Seção 2: Organizar Notas -->
+    <section id="organizar">
+        <h2>Organizar Notas</h2>
+        <button id="organize-button" onclick="organizeNotes()" disabled>Organizar</button>
+        <ul id="organized-notes-list"></ul>
+    </section>
+
+    <script>
+        let editingNoteId = null;
+
+        function loadNotes() {
+            fetch("/notes")
+                .then(response => response.json())
+                .then(notes => {
+                    const notesList = document.getElementById("notes-list");
+                    notesList.innerHTML = "";
+                    for (const id in notes) {
+                        const note = notes[id];
+                        const noteItem = document.createElement("li");
+                        noteItem.innerHTML = `
+                            <strong>ID:</strong> ${id} <br>
+                            <strong>Conteúdo:</strong> ${note.content} <br>
+                            <strong>Categoria:</strong> <span>${note.category}</span> <br>
+                            <button onclick="editNote('${id}')">Editar</button>
+                            <button onclick="deleteNote('${id}')">Excluir</button>
+                        `;
+                        notesList.appendChild(noteItem);
+                    }
+                });
+        }
+
+        document.getElementById("note-form").addEventListener("submit", function(event) {
+            event.preventDefault();
+            if (editingNoteId) {
+                saveEdit();
+            } else {
+                const title = document.getElementById("title").value;
+                const content = document.getElementById("content").value;
+
+                fetch("/notes", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ title, content })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    loadNotes();
+                    document.getElementById("note-form").reset();
+                    document.getElementById("organize-button").disabled = false;
+                });
+            }
+        });
+
+        function editNote(noteId) {
+            fetch(`/notes/${noteId}`)
+                .then(response => response.json())
+                .then(note => {
+                    document.getElementById("title").value = note.title;
+                    document.getElementById("content").value = note.content;
+                    document.getElementById("category").value = note.category;
+
+                    // Modo de edição
+                    editingNoteId = noteId;
+                    document.getElementById("form-title").innerText = "Editar Nota";
+                    document.getElementById("submit-button").style.display = "none";
+                    document.getElementById("cancel-button").style.display = "inline";
+                    document.getElementById("save-button").style.display = "inline";
+                });
+        }
+
+        function cancelEdit() {
+            editingNoteId = null;
+            document.getElementById("note-form").reset();
+            document.getElementById("form-title").innerText = "Criar Nova Nota";
+            document.getElementById("submit-button").style.display = "inline";
+            document.getElementById("cancel-button").style.display = "none";
+            document.getElementById("save-button").style.display = "none";
+        }
+
+        function saveEdit() {
+            const title = document.getElementById("title").value;
+            const content = document.getElementById("content").value;
+
+            fetch(`/notes/${editingNoteId}`, {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ title, content })
+            })
+            .then(response => response.json())
+            .then(data => {
+                loadNotes();
+                cancelEdit(); // Volta o formulário ao modo de criação
+            });
+        }
+
+        function organizeNotes() {
+            const organizeButton = document.getElementById("organize-button");
+            organizeButton.disabled = true;
+
+            fetch("/organize", {
+                method: "POST"
+            })
+            .then(response => response.json())
+            .then(organizedNotes => {
+                const organizedNotesList = document.getElementById("organized-notes-list");
+                organizedNotesList.innerHTML = "";
+                for (const id in organizedNotes) {
+                    const note = organizedNotes[id];
+                    const noteItem = document.createElement("li");
+                    noteItem.innerHTML = `
+                        <strong>ID:</strong> ${id} <br>
+                        <strong>Conteúdo:</strong> ${note.content} <br>
+                        <strong>Categoria Sugerida:</strong> <span>${note.suggested_category}</span> <br>
+                        <button onclick="applyCategory('${id}', '${note.suggested_category}')">Aplicar</button>
+                    `;
+                    organizedNotesList.appendChild(noteItem);
+                }
+                organizeButton.disabled = false;
+            });
+        }
+
+        function applyCategory(noteId, suggestedCategory) {
+            fetch(`/apply_category/${noteId}`, {
+                method: "PUT",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({ suggested_category: suggestedCategory })
+            })
+            .then(response => response.json())
+            .then(data => {
+                loadNotes();
+            });
+            if (response.ok) {
+                button.disabled = true; // Desabilita o botão "Aplicar" após a alteração
+            }
+        }
+
+        window.onload = loadNotes;
+    </script>
+</body>
+</html>
